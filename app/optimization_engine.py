@@ -96,7 +96,8 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     # The actual latest start time is the minimum of the two constraints
     end = min(attr_latest_start, daily_latest_start) 
     
-
+    # 3. Check for Impossible Constraint (End must be >= Start)
+    if end < start:
         
         # 3. Check for Impossible Constraint
         if end < start:
