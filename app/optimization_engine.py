@@ -82,24 +82,23 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
             time_windows.append((daily_start, daily_end))
             continue # Skip to the next attraction
             
-        # 2. Calculate Constrained Time Window (FIXED: Moved inside the loop)
-        # Earliest start time: Must be AFTER daily start AND attraction open
-        start = max(open_time, daily_start) 
+        # 2. Calculate Constrained Time Window (FIXED: MOVED INSIDE THE LOOP)
+        start = max(open_time, daily_start) # Start time must be AFTER daily start
         
-        # Latest possible visit START time:
-        # 1. Must end before Attraction Close Time: close_time - visit_duration
+        # Latest possible visit START time = min(Attraction Close - Duration, Daily End Time - Duration)
+        # Ensure the visit ends before the daily end time AND the attraction close time.
+        
         attr_latest_start = close_time - visit_duration 
-        # 2. Must end before Daily End Time: daily_end - visit_duration
         daily_latest_start = daily_end - visit_duration
         
         # The actual latest start time is the minimum of the two constraints
         end = min(attr_latest_start, daily_latest_start) 
         
-        # 3. Check for Impossible Constraint (End must be >= Start) (FIXED: Moved inside the loop)
+        # 3. Check for Impossible Constraint (End must be >= Start) (FIXED: MOVED INSIDE THE LOOP)
         if end < start:
-             # If the required visit duration makes the attraction impossible to schedule
-             print(f"Warning: Attraction '{r.name}' is impossible to schedule (Visit Duration exceeds possible window). Setting full-day range.")
-             # Setting a safe, full-day range prevents the 'CP Solver fail' 
+             # If the required visit duration is longer than the open hours
+             print(f"Warning: Attraction '{r.name}' is impossible to schedule (Duration > Open Hours). Setting full-day range.")
+             # Setting a safe, full-day range prevents the 'CP Solver fail'
              time_windows.append((daily_start, daily_end))
         else:
              # Set the valid, constrained window for the visit START time
