@@ -50,8 +50,7 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
         return [{"error": "No attractions found for the given criteria."}]
         
     # Add a virtual depot/starting point (Index 0)
-    # Use the first attraction's coordinates as the depot for simplicity
-    DEPOT_LOCATION = (locations[0][0], locations[0][1]) 
+    DEPOT_LOCATION = (locations[0][0], locations[0][1])
     full_locations = [DEPOT_LOCATION] + locations
     
     data = {}
@@ -60,22 +59,15 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     data['num_vehicles'] = 1 
     data['depot'] = 0 
     
-    # --- ROBUST TIME WINDOW FIX START ---
+    # Time Windows for each location (in minutes from midnight)
     
-    # Convert daily hours to minutes from midnight
+    # --- ROBUST TIME WINDOW FIX: Ensure Integer Safety and Check Constraints ---
     daily_start = daily_request.daily_start_hour * 60
     daily_end = daily_request.daily_end_hour * 60
-    
-    # 1. Initialize time_windows with the Depot's constraints (Index 0)
-    # The Depot/Vehicle is available for the entire daily window.
-    time_windows = [(daily_start, daily_end)] 
+    time_windows = [(daily_start, daily_end)] # Time window for the depot/vehicle (Index 0)
 
-    # 2. Iterate and calculate constraints for every attraction (Index 1+)
     for r in attractions_df.itertuples():
-        
-        # Default to the full daily range for consistency and safety
-        default_window = (daily_start, daily_end)
-        
+        # 1. Handle Invalid Data (NaNs/Non-numeric)
         try:
             # Safely cast all required values to integers (minutes from midnight)
             if math.isnan(r.open_time) or math.isnan(r.close_time) or math.isnan(r.avg_visit_duration):
@@ -84,35 +76,34 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
             open_time = int(r.open_time)
             close_time = int(r.close_time)
             visit_duration = int(r.avg_visit_duration)
-            
-            # --- CALCULATE CONSTRAINTS ---
-            
-            # The earliest a visit can START is max(Attraction Open, Daily Start)
-            start = max(open_time, daily_start)
-            
-            # The latest a visit can START must ensure it can still finish
-            # before the latest possible end time (Attraction Close OR Daily End).
-            max_end_time = min(close_time, daily_end)
-            # Latest possible visit START time = max_end_time - visit_duration
-            end = max_end_time - visit_duration
-            
-            # --- ROBUSTNESS CHECK: CRITICAL FIX ---
-            
-            if end < start:
-                 # If the earliest start time (start) is after the latest possible 
-                 # start time (end), the attraction is impossible to schedule.
-                 # We use the safe, feasible default_window to prevent CP Solver failure.
-                 print(f"Warning: Attraction '{r.name}' is impossible to schedule. Visit Duration ({visit_duration}m) exceeds available time window. Latest Start: {end}, Earliest Start: {start}")
-                 time_windows.append(default_window)
-            else:
-                 # Set the valid, constrained window for the visit START time
-                 time_windows.append((start, end)) 
-                 
         except (ValueError, TypeError):
-             # If any value is NaN or otherwise invalid, use the default full-day range.
-             print(f"Warning: Attraction '{r.name}' has invalid time data. Setting full-day range.")
-             time_windows.append(default_window)
-
+            # If any value is NaN or otherwise invalid, set a full-day range as a fallback
+            print(f"Warning: Attraction '{r.name}' has invalid time data. Setting full-day range.")
+            time_windows.append((daily_start, daily_end))
+            continue # Skip to the next attraction
+            
+        # 2. Calculate Constrained Time Window (FIXED: Moved inside the loop)
+        # Earliest start time: Must be AFTER daily start AND attraction open
+        start = max(open_time, daily_start) 
+        
+        # Latest possible visit START time:
+        # 1. Must end before Attraction Close Time: close_time - visit_duration
+        attr_latest_start = close_time - visit_duration 
+        # 2. Must end before Daily End Time: daily_end - visit_duration
+        daily_latest_start = daily_end - visit_duration
+        
+        # The actual latest start time is the minimum of the two constraints
+        end = min(attr_latest_start, daily_latest_start) 
+        
+        # 3. Check for Impossible Constraint (End must be >= Start) (FIXED: Moved inside the loop)
+        if end < start:
+             # If the required visit duration makes the attraction impossible to schedule
+             print(f"Warning: Attraction '{r.name}' is impossible to schedule (Visit Duration exceeds possible window). Setting full-day range.")
+             # Setting a safe, full-day range prevents the 'CP Solver fail' 
+             time_windows.append((daily_start, daily_end))
+        else:
+             # Set the valid, constrained window for the visit START time
+             time_windows.append((start, end)) 
              
     data['time_windows'] = time_windows
     # --------------------------------------------------------------------------
@@ -131,11 +122,7 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
         duration = 0
         if from_node > 0: 
              # The attraction data corresponds to index - 1 because of the depot offset
-             try:
-                duration = int(attractions_df.iloc[from_node - 1]['avg_visit_duration'])
-             except (ValueError, TypeError):
-                # Fallback to a sensible default if duration data is invalid
-                duration = 60 
+             duration = attractions_df.iloc[from_node - 1]['avg_visit_duration']
              
         # Total cost is Travel Time + Visit Duration
         return data['time_matrix'][from_node][to_node] + duration
@@ -157,7 +144,7 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     # Add Time Window Constraints for all locations
     for location_idx, time_window in enumerate(data['time_windows']):
         index = manager.NodeToIndex(location_idx)
-        # This line is now safe because all time_windows are guaranteed to be feasible (start <= end)
+        # This line is where the constraint is set. With the fix above, time_window[0] <= time_window[1] is guaranteed.
         time_dimension.CumulVar(index).SetRange(time_window[0], time_window[1])
 
     # 5. Search Parameters and Solve
