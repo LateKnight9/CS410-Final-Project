@@ -1,0 +1,11 @@
+# requirements.txt
+Flask
+requests
+beautifulsoup4
+Scrapy
+pandas
+numpy
+scikit-learn
+textblob
+nltk
+ortools # Google OR-Tools for optimization
