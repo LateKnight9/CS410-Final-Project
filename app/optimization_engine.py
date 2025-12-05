@@ -84,10 +84,19 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
             time_windows.append((daily_start, daily_end))
             continue # Skip to the next attraction
             
-        # 2. Calculate Constrained Time Window
-        start = open_time # Earliest start time is opening time
-        # Latest possible visit START time = Closing Time - Visit Duration
-        end = close_time - visit_duration 
+    # 2. Calculate Constrained Time Window
+    start = max(open_time, daily_start) # Start time must be AFTER daily start
+    
+    # Latest possible visit START time = min(Attraction Close - Duration, Daily End Time - Duration)
+    # Ensure the visit ends before the daily end time AND the attraction close time.
+    
+    attr_latest_start = close_time - visit_duration 
+    daily_latest_start = daily_end - visit_duration
+    
+    # The actual latest start time is the minimum of the two constraints
+    end = min(attr_latest_start, daily_latest_start) 
+    
+
         
         # 3. Check for Impossible Constraint
         if end < start:
