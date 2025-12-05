@@ -32,10 +32,8 @@ def apply_sentiment_and_topics(df: pd.DataFrame) -> pd.DataFrame:
     # Initialize the TF-IDF Vectorizer
     vectorizer = TfidfVectorizer(
         stop_words='english', 
-        max_df=0.85, 
-        min_df=2, # Ignore terms that appear in too few documents
-        max_features=1000 # Limit to the top 1000 features
     )
+    
     
     # Fit and transform the reviews
     tfidf = vectorizer.fit_transform(df['raw_reviews'])
