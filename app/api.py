@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from .data_models import ItineraryRequest, Attraction
 from .nlp_processor import apply_sentiment_and_topics
 from .recommendation_engine import generate_recommendations
-from app.optimization_engine import solve_vrptw_for_day
+from .optimization_engine import solve_vrptw_for_day
 
 app = Flask(__name__)
 
