@@ -3,7 +3,7 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 import pandas as pd
 import numpy as np
-from typing import List, Dict
+from typing import List, Tuple, Dict
 
 def create_time_matrix(locations: List[Tuple[float, float]], travel_speed_kmph: float = 20) -> np.ndarray:
     """
