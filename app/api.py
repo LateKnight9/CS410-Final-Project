@@ -72,10 +72,17 @@ def generate_itinerary():
         
         if daily_pool.empty:
             break
-        
+
         # 2. Optimization: Solve the Daily TSP with Time Windows
-        daily_route = solve_vrptw_for_day(daily_pool, req)
+        print(f"DEBUG: Daily Pool for {current_day}:")
+        print(daily_pool[['name', 'open_time', 'close_time', 'avg_visit_duration']])
         
+        if daily_pool.empty:
+             print("DEBUG: daily_pool is empty. Breaking loop.")
+             break
+        
+        daily_route = solve_vrptw_for_day(daily_pool, req)
+
         # 3. Format Output and Update Pool
         if "error" not in daily_route[0]:
             final_itinerary.append({
