@@ -1,0 +1,7 @@
+{
+    "city": "New York",
+    "start_date": "2025-12-05",
+    "end_date": "2025-12-06",
+    "budget": 2,
+    "preferences": ["historical", "culture", "landmark"]
+}
