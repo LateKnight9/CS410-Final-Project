@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Tuple, Dict
 from .data_models import ItineraryRequest 
-import math # Import math for isnan check on floating-point data
+import math 
 
 def create_time_matrix(locations: List[Tuple[float, float]], travel_speed_kmph: float = 20) -> np.ndarray:
     """
@@ -46,12 +46,10 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     # 1. Prepare Locations and Data Model
     locations = [(r.latitude, r.longitude) for r in attractions_df.itertuples()]
     
-    # Check for empty locations list (which can happen if filtering is too aggressive)
     if not locations:
         return [{"error": "No attractions found for the given criteria."}]
         
     # Add a virtual depot/starting point (Index 0)
-    # The depot should ideally be the user's starting point, but for mock data, use the first location.
     DEPOT_LOCATION = (locations[0][0], locations[0][1])
     full_locations = [DEPOT_LOCATION] + locations
     
@@ -63,37 +61,46 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     
     # Time Windows for each location (in minutes from midnight)
     
-    # Depot/Day Window: Represents the hard boundaries of the travel day
+    # --- ROBUST TIME WINDOW FIX: Ensure Integer Safety and Check Constraints ---
     daily_start = daily_request.daily_start_hour * 60
     daily_end = daily_request.daily_end_hour * 60
-    time_windows = [(daily_start, daily_end)] 
+    time_windows = [(daily_start, daily_end)] # Time window for the depot/vehicle (Index 0)
 
-    # --- ROBUST TIME WINDOW FIX ---
     for r in attractions_df.itertuples():
-        # Handle potential NaNs or invalid data in the mock data
-        if any(math.isnan(val) for val in [r.open_time, r.close_time, r.avg_visit_duration]):
-            print(f"Warning: Attraction '{r.name}' has invalid time data (NaN). Setting full-day range.")
+        # 1. Handle Invalid Data (NaNs/Non-numeric)
+        try:
+            # Safely cast all required values to integers (minutes from midnight)
+            # Use math.isnan check as an alternative to handle NumPy NaNs explicitly if needed, 
+            # though the try/except block generally catches them upon int() conversion.
+            if math.isnan(r.open_time) or math.isnan(r.close_time) or math.isnan(r.avg_visit_duration):
+                 raise ValueError("NaN detected in time data")
+                 
+            open_time = int(r.open_time)
+            close_time = int(r.close_time)
+            visit_duration = int(r.avg_visit_duration)
+        except (ValueError, TypeError):
+            # If any value is NaN or otherwise invalid, set a full-day range as a fallback
+            print(f"Warning: Attraction '{r.name}' has invalid time data. Setting full-day range.")
             time_windows.append((daily_start, daily_end))
-            continue
+            continue # Skip to the next attraction
             
-        # Minimum visit start time (opening time)
-        start = int(r.open_time)
+        # 2. Calculate Constrained Time Window
+        start = open_time # Earliest start time is opening time
+        # Latest possible visit START time = Closing Time - Visit Duration
+        end = close_time - visit_duration 
         
-        # Latest possible visit start time: closing time MINUS the visit duration.
-        end = int(r.close_time - r.avg_visit_duration)
-        
-        # Check for impossible time constraint: duration is longer than open hours (end < start)
+        # 3. Check for Impossible Constraint
         if end < start:
-             # Set a very wide, non-constricting window (e.g., the whole day).
-             # The solver's cost function will still heavily discourage this attraction 
-             # if it truly doesn't fit, but it prevents an immediate solver failure.
-             print(f"Warning: Attraction '{r.name}' requires {r.avg_visit_duration} mins but is only open for {r.close_time - r.open_time} mins. Setting full-day range.")
+             # If the required visit duration is longer than the open hours
+             print(f"Warning: Attraction '{r.name}' is impossible to schedule (Duration > Open Hours). Setting full-day range.")
              time_windows.append((daily_start, daily_end))
         else:
              # Set the valid, constrained window for the visit START time
              time_windows.append((start, end)) 
              
     data['time_windows'] = time_windows
+    # --------------------------------------------------------------------------
+
 
     # 2. Setup OR-Tools
     manager = pywrapcp.RoutingIndexManager(data['num_locations'], data['num_vehicles'], data['depot'])
@@ -130,7 +137,7 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     # Add Time Window Constraints for all locations
     for location_idx, time_window in enumerate(data['time_windows']):
         index = manager.NodeToIndex(location_idx)
-        # This line, where the exception occurred previously, now uses safe ranges.
+        # This line is where the constraint is set.
         time_dimension.CumulVar(index).SetRange(time_window[0], time_window[1])
 
     # 5. Search Parameters and Solve
