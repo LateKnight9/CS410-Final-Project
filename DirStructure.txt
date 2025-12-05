@@ -1,0 +1,17 @@
+IntelligentTravelPlanner/
+├── app/
+│   ├── api.py                   # Main Flask routes/API
+│   ├── data_models.py           # Python data classes
+│   ├── nlp_processor.py         # Sentiment & Topic Modeling logic
+│   ├── recommendation_engine.py # Content-based filtering logic
+│   └── optimization_engine.py   # OR-Tools itinerary logic
+├── data_ingestion/
+│   ├── scrapy.cfg               # Scrapy configuration
+│   └── spiders/
+│       └── travel_spider.py     # Scrapy spider (Web Crawler)
+├── data/
+│   └── processed_attractions.csv # Placeholder for scraped/processed data
+├── templates/                   # Flask HTML templates
+│   └── index.html
+├── requirements.txt
+└── run.py                       # Application entry point
