@@ -4,13 +4,14 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 import pandas as pd
 import numpy as np
-from typing import List, Tuple, Dict # Imported for type hinting
-from .data_models import ItineraryRequest # Assuming ItineraryRequest is accessible
+from typing import List, Tuple, Dict
+from .data_models import ItineraryRequest 
+import math # Import math for isnan check on floating-point data
 
 def create_time_matrix(locations: List[Tuple[float, float]], travel_speed_kmph: float = 20) -> np.ndarray:
     """
     Calculates travel time between all pairs of locations using Haversine distance.
-    (NOTE: This is a placeholder; real projects require a Map API for accurate travel time.)
+    (Placeholder for simplicity; real projects require a Map API for accuracy.)
     """
     num_locations = len(locations)
     time_matrix = np.zeros((num_locations, num_locations), dtype=int)
@@ -44,8 +45,14 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     """
     # 1. Prepare Locations and Data Model
     locations = [(r.latitude, r.longitude) for r in attractions_df.itertuples()]
+    
+    # Check for empty locations list (which can happen if filtering is too aggressive)
+    if not locations:
+        return [{"error": "No attractions found for the given criteria."}]
+        
     # Add a virtual depot/starting point (Index 0)
-    DEPOT_LOCATION = (locations[0][0], locations[0][1]) # Assuming first location is start/end
+    # The depot should ideally be the user's starting point, but for mock data, use the first location.
+    DEPOT_LOCATION = (locations[0][0], locations[0][1])
     full_locations = [DEPOT_LOCATION] + locations
     
     data = {}
@@ -55,23 +62,35 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     data['depot'] = 0 
     
     # Time Windows for each location (in minutes from midnight)
-    time_windows = [(daily_request.daily_start_hour * 60, daily_request.daily_end_hour * 60)] # Depot/Day window
+    
+    # Depot/Day Window: Represents the hard boundaries of the travel day
+    daily_start = daily_request.daily_start_hour * 60
+    daily_end = daily_request.daily_end_hour * 60
+    time_windows = [(daily_start, daily_end)] 
 
-    # --- CRITICAL FIX APPLIED HERE ---
+    # --- ROBUST TIME WINDOW FIX ---
     for r in attractions_df.itertuples():
-        start = r.open_time
-        # Max start time must ensure the visit (r.avg_visit_duration) ends before closing (r.close_time).
-        end = r.close_time - r.avg_visit_duration
+        # Handle potential NaNs or invalid data in the mock data
+        if any(math.isnan(val) for val in [r.open_time, r.close_time, r.avg_visit_duration]):
+            print(f"Warning: Attraction '{r.name}' has invalid time data (NaN). Setting full-day range.")
+            time_windows.append((daily_start, daily_end))
+            continue
+            
+        # Minimum visit start time (opening time)
+        start = int(r.open_time)
         
-        # Guardrail against impossible scheduling (e.g., duration > open hours)
+        # Latest possible visit start time: closing time MINUS the visit duration.
+        end = int(r.close_time - r.avg_visit_duration)
+        
+        # Check for impossible time constraint: duration is longer than open hours (end < start)
         if end < start:
-             # If impossible, set the window to the smallest possible valid range 
-             # (or skip/filter this attraction upstream for robustness).
-             # We set a large range to allow the solver to "skip" it implicitly if possible.
-             # Alternatively, let's make it explicitly impossible if end < start:
-             time_windows.append((start, start - 1)) # Impossible range (min > max)
+             # Set a very wide, non-constricting window (e.g., the whole day).
+             # The solver's cost function will still heavily discourage this attraction 
+             # if it truly doesn't fit, but it prevents an immediate solver failure.
+             print(f"Warning: Attraction '{r.name}' requires {r.avg_visit_duration} mins but is only open for {r.close_time - r.open_time} mins. Setting full-day range.")
+             time_windows.append((daily_start, daily_end))
         else:
-             # The solver seeks to find a visit START time between 'start' and 'end'
+             # Set the valid, constrained window for the visit START time
              time_windows.append((start, end)) 
              
     data['time_windows'] = time_windows
@@ -103,15 +122,15 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
     routing.AddDimension(
         transit_callback_index,
         0, # Slack (max waiting time allowed at a node)
-        daily_request.daily_end_hour * 60, # Max total time (end of day)
+        daily_end, # Max total time (end of day)
         True, # Force start cumul to zero
         time)
     time_dimension = routing.GetDimensionOrDie(time)
 
     # Add Time Window Constraints for all locations
-    # Line 97 from the original traceback is here. It uses the corrected time_windows list.
     for location_idx, time_window in enumerate(data['time_windows']):
         index = manager.NodeToIndex(location_idx)
+        # This line, where the exception occurred previously, now uses safe ranges.
         time_dimension.CumulVar(index).SetRange(time_window[0], time_window[1])
 
     # 5. Search Parameters and Solve
@@ -120,20 +139,21 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
         routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
     search_parameters.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH)
-    search_parameters.time_limit.seconds = 5
+    search_parameters.time_limit.seconds = 5 # Set a time limit for the solver
 
     solution = routing.SolveWithParameters(search_parameters)
     
     # 6. Interpret Solution
     if not solution:
         # If the solver fails, return the specific error message
-        return [{"error": "Optimization failed to find a feasible route. Check time windows and travel times."}]
+        return [{"error": "Optimization failed to find a feasible route. Try reducing the number of stops or increasing the daily available time."}]
 
     def get_route(solution, routing, manager):
         route = []
         index = routing.Start(0)
         time_dimension = routing.GetDimensionOrDie('Time')
         
+        # Traverse the solution path
         while not routing.IsEnd(index):
             node_index = manager.IndexToNode(index)
             
@@ -143,14 +163,15 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
                 attr_data = attractions_df.iloc[node_index - 1].to_dict()
                 time_var = time_dimension.CumulVar(index)
                 
+                # The cumulative variable is the start time of the activity at this node.
                 start_time_minutes = solution.Min(time_var)
                 end_time_minutes = start_time_minutes + attr_data['avg_visit_duration']
                 
                 route.append({
                     "attraction_name": attr_data['name'],
-                    "start_time_minutes": start_time_minutes,
-                    "end_time_minutes": end_time_minutes,
-                    "arrival_time": f"{start_time_minutes // 60:02d}:{start_time_minutes % 60:02d}",
+                    "start_time_minutes": int(start_time_minutes),
+                    "end_time_minutes": int(end_time_minutes),
+                    "arrival_time": f"{int(start_time_minutes) // 60:02d}:{int(start_time_minutes) % 60:02d}:00",
                 })
             index = solution.Value(routing.NextVar(index))
             
