@@ -19,7 +19,7 @@ def create_time_matrix(locations: List[Tuple[float, float]], travel_speed_kmph: 
     R = 6371 # Earth radius in km
     
     def haversine(lat1, lon1, lat2, lon2):
-        lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+        lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon1])
         dlat = lat2 - lat1
         dlon = lon2 - lon1
         a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
@@ -86,23 +86,21 @@ def solve_vrptw_for_day(attractions_df: pd.DataFrame, daily_request: ItineraryRe
         start = max(open_time, daily_start) # Start time must be AFTER daily start
         
         # Latest possible visit START time = min(Attraction Close - Duration, Daily End Time - Duration)
-        # Ensure the visit ends before the daily end time AND the attraction close time.
-        
         attr_latest_start = close_time - visit_duration 
         daily_latest_start = daily_end - visit_duration
         
         # The actual latest start time is the minimum of the two constraints
         end = min(attr_latest_start, daily_latest_start) 
         
-        # 3. Check for Impossible Constraint (End must be >= Start) (FIXED: MOVED INSIDE THE LOOP)
+        # 3. Check for Impossible Constraint (End must be >= Start)
         if end < start:
              # If the required visit duration is longer than the open hours
              print(f"Warning: Attraction '{r.name}' is impossible to schedule (Duration > Open Hours). Setting full-day range.")
-             # Setting a safe, full-day range prevents the 'CP Solver fail'
+             # Setting a safe, full-day range prevents the 'CP Solver fail' 
              time_windows.append((daily_start, daily_end))
         else:
              # Set the valid, constrained window for the visit START time
-             time_windows.append((start, end)) 
+             time_windows.append((start, end)) # <--- NOW APPENDING THE WINDOW INSIDE THE LOOP
              
     data['time_windows'] = time_windows
     # --------------------------------------------------------------------------
