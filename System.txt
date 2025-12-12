@@ -1,0 +1,23 @@
+          User Input
+        (city, budget,
+      preferences, dates)
+               |
+               v
+      +------------------+
+      | NLP Engine       |
+      | - Sentiment      |
+      | - Theme Parsing  |
+      | - Similarity     |
+      +------------------+
+               |
+               v
+   Local Data (JSON) + External API Data
+               |
+               v
+   Scoring & Ranking Algorithm
+               |
+               v
+   Time-Window Aware Scheduler
+               |
+               v
+        Final Itinerary (JSON)
