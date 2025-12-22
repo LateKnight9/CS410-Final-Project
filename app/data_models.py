@@ -11,11 +11,11 @@ class Attraction:
     longitude: float
     rating: float             # e.g., 4.5
     review_count: int
-    open_time: int            # Minutes from midnight (e.g., 9:00 = 540)
-    close_time: int           # Minutes from midnight (e.g., 17:00 = 1020)
+    open_time: int            # Minutes from midnight
+    close_time: int           # Minutes from midnight 
     avg_visit_duration: int   # In minutes
     price_level: int          # 1 to 4 ($ to $$$$)
-    themes: List[str]         # e.g., ['historical', 'culture', 'museum']
+    themes: List[str]         #['historical', 'culture', 'museum']
     sentiment_score: float    # -1.0 (Negative) to 1.0 (Positive)
     
 @dataclass
@@ -25,6 +25,6 @@ class ItineraryRequest:
     start_date: str           # YYYY-MM-DD
     end_date: str             # YYYY-MM-DD
     budget: int               # 1 to 4
-    preferences: List[str]    # e.g., ['historical', 'food', 'family-friendly']
+    preferences: List[str]    #  ['historical', 'food', 'family-friendly']
     daily_start_hour: int = 9  # 9 AM
     daily_end_hour: int = 21   # 9 PM
