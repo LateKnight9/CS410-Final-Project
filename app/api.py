@@ -11,17 +11,16 @@ from .optimization_engine import solve_vrptw_for_day
 
 app = Flask(__name__)
 
-# --- Mock Data Loading and Pre-Processing (Simulates Database/Data Pipeline) ---
-# In a real app, this would query a database/data store
+# Data Loading and Pre-Processing (Simulates Database/Data Pipeline)
 try:
     # Load previously scraped and processed data
     DATA_PATH = 'data/processed_attractions.csv'
     ATTRACTIONS_DATA = pd.read_csv(DATA_PATH)
-    # Ensure data is processed (e.g., if you ran a new crawl)
+    # Ensure data is processed 
     ATTRACTIONS_DATA = apply_sentiment_and_topics(ATTRACTIONS_DATA)
 except FileNotFoundError:
     print(f"Warning: {DATA_PATH} not found. Creating mock data.")
-    # Create mock data for testing the API logic
+    #  data for testing the API logic
     ATTRACTIONS_DATA = pd.DataFrame({
         'id': [1, 2, 3, 4, 5],
         'name': ['Museum A', 'Park B', 'Restaurant C', 'Landmark D', 'Gallery E'],
@@ -37,7 +36,7 @@ except FileNotFoundError:
         'raw_reviews': ['great museum a must see', 'beautiful park excellent trails', 'amazing food very expensive', 'iconic landmark worth the visit', 'nice art but small and dated'],
     })
     ATTRACTIONS_DATA = apply_sentiment_and_topics(ATTRACTIONS_DATA)
-    # Save mock data so nlp_processor doesn't run every time
+    # data so nlp_processor doesn't run every time
     ATTRACTIONS_DATA.to_csv(DATA_PATH, index=False)
 
 
