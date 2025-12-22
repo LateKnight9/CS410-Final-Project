@@ -54,10 +54,10 @@ def apply_sentiment_and_topics(df: pd.DataFrame) -> pd.DataFrame:
     # Get the index of the dominant topic for each attraction
     dominant_topic_indices = topic_results.argmax(axis=1)
 
-    # Convert the NumPy array into a **Pandas Series** before mapping (Fix for AttributeError)
+    # Convert the NumPy array into a Pandas Series before mapping - Fix for AttributeError
     dominant_topic_series = pd.Series(dominant_topic_indices)
 
-    # Simple function to map index to a thematic label (Customize these labels for your data!)
+    # function to map index to a thematic label
     topic_labels: Dict[int, str] = {
         0: 'Historical/Museums', 
         1: 'Food/Dining', 
